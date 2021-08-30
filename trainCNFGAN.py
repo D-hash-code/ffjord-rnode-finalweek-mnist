@@ -154,7 +154,7 @@ nvals = 2**args.nbits ##**
 # Only want master rank logging
 is_master = (not args.distributed) or (dist_utils.env_rank()==0)
 is_rank0 = args.local_rank == 0
-write_log = is_rank0 and is_master
+write_log = True
 
 
 def add_noise(x, nbits=8): ##** What datatype is x input?
