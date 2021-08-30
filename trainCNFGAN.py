@@ -598,7 +598,7 @@ if __name__ == "__main__": #def main():
 
                     rv = tuple(torch.tensor(0.).cuda() for r in reg_states)
 
-                    total_gpus, batch_total, r_loss, r_bpd, r_nfe, r_grad_norm, *rv = dist_utils.sum_tensor(metrics).cpu().numpy()
+                    total_gpus, batch_total, r_loss, r_bpd, r_nfe, r_grad_norm, *rv = metrics.cpu().numpy()
 
 
                     
@@ -737,7 +737,7 @@ if __name__ == "__main__": #def main():
                     loss = lossmean.item()
                     metrics = torch.tensor([1., loss, meandist, steps]).float().cuda()
 
-                    total_gpus, r_bpd, r_mdist, r_steps = dist_utils.sum_tensor(metrics).cpu().numpy()
+                    total_gpus, r_bpd, r_mdist, r_steps = metrics.cpu().numpy()
                     eval_time = time.time()-start
 
                     if write_log:
