@@ -564,7 +564,7 @@ if __name__ == "__main__": #def main():
                     elif np.isinf(bpd.data.item()):
                         raise ValueError('model returned inf during training')
                     
-                    loss = bpd
+                    loss = bpd + lossG
                     if regularization_coeffs:
                         reg_loss = sum(
                             reg_state * coeff for reg_state, coeff in zip(reg_states, regularization_coeffs) if coeff != 0
