@@ -711,7 +711,7 @@ if __name__ == "__main__": #def main():
         else:
             torch.save({
                 "args": args,
-                "gen_state_dict": model.module.state_dict() if torch.cuda.is_available() else model.state_dict(),
+                "gen_state_dict": model.state_dict(),
                 "disc_state_dict": netD.state_dict(),
                 "optim_state_dict": optimizer.state_dict(), 
                 "disc_optim_state_dict": optimizerD.state_dict(), 
