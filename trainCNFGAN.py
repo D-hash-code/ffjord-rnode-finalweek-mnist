@@ -489,292 +489,304 @@ if __name__ == "__main__": #def main():
             netD.train()
             ##--##
 
-            with open(trainlog,'a') as f:
-                if write_log: csvlogger = csv.DictWriter(f, traincolumns) ##**
 
-                for _, (x, y) in enumerate(train_loader):
-                    start = time.time()
-                    update_lr(optimizer, itr) ##Should I update discriminator learning rate too?
 
-                    # cast data and move to device
-                    x = add_noise(cvt(x), nbits=args.nbits)
-                    #x = x.clamp_(min=0, max=1 )
+            for _, (x, y) in enumerate(train_loader):
+                start = time.time()
+                update_lr(optimizer, itr) ##Should I update discriminator learning rate too?
 
-                    if args.training_type in ['hyb','adv']:
-                            
-                        ##---Training discriminator---------------------------
-                        bs = x.shape[0]
-                        netD.zero_grad()
-                        ##** Do I need optimizer zero grad?
-                        optimizerD.zero_grad()
-                        #real_images = real_images.to(device)
-                        label = torch.full((bs,), real_label, device=device,dtype=torch.float32)
+                # cast data and move to device
+                x = add_noise(cvt(x), nbits=args.nbits)
+                #x = x.clamp_(min=0, max=1 )
 
-                        output = netD(x)
-                        lossD_real = criterion(output, label)
-                        lossD_real.backward()
-                        D_x = output.mean().item() ##lg
-
-                        #noise = cvt(torch.randn(bs, args.nz, 1, 1, device=device))
-                        noise = cvt(torch.randn(args.batch_size, *data_shape))
-                        #fake_images = netG(noise)
-                        fake_images, _, _ = model(noise, reverse=True)
+                if args.training_type in ['hyb','adv']:
                         
-                        label.fill_(fake_label)
-                        output = netD(fake_images.detach())
-                        lossD_fake = criterion(output, label)
-                        lossD_fake.backward()
-                        D_G_z1 = output.mean().item() ## D(G(z))
-                        lossD = lossD_real + lossD_fake
-                        grad_norm_adv_d = torch.nn.utils.clip_grad_norm_(netD.parameters(), args.max_grad_norm)
-                        optimizerD.step()
-                        ##----------------------------------------------------
-                        
-                        ## ##---Printing (GAN Stuff)
-                        ## if (i+1)%100 == 0:
-                        ##     print('Epoch [{}/{}], step [{}/{}], d_loss: {:.4f}, g_loss: {:.4f}, D(x): {:.2f}, Discriminator ## - D(G(x)): {:.2f}, Generator - D(G(x)): {:.2f}'.format(epoch+1, args.num_epochs, 
-                        ##                                         i+1, num_batches, lossD.item(), lossG.item(), D_x, D_G_z1, ## D_G_z2))
-                        ##----------------------------------------------------
+                    ##---Training discriminator---------------------------
+                    bs = x.shape[0]
+                    netD.zero_grad()
+                    ##** Do I need optimizer zero grad?
+                    optimizerD.zero_grad()
+                    #real_images = real_images.to(device)
+                    label = torch.full((bs,), real_label, device=device,dtype=torch.float32)
 
-                        ##---Training Generator/CNF Adversarially------------
-                        model.zero_grad()
-                        optimizer.zero_grad()
+                    output = netD(x)
+                    lossD_real = criterion(output, label)
+                    lossD_real.backward()
+                    D_x = output.mean().item() ##lg
 
-                        label.fill_(real_label)
-                        output = netD(fake_images) ##** Do I need to compute this again? Can I use from before??
-                        lossG = criterion(output, label)
-                        if args.training_type == 'adv':
-                            lossG.backward()
-                            grad_norm_adv_g = torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                            optimizer.step()
-                        D_G_z2 = output.mean().item()
-                        
-
-                        ##---------------------------------------------------
-
-
-                    # compute loss
-                    if args.training_type in ['hyb','lik']:
-                        model.zero_grad()
-                        optimizer.zero_grad()
-
-                    bpd, (x, z), reg_states = compute_bits_per_dim(x, model)
-                    if np.isnan(bpd.data.item()):
-                        raise ValueError('model returned nan during training')
-                    elif np.isinf(bpd.data.item()):
-                        raise ValueError('model returned inf during training')
+                    #noise = cvt(torch.randn(bs, args.nz, 1, 1, device=device))
+                    noise = cvt(torch.randn(args.batch_size, *data_shape))
+                    #fake_images = netG(noise)
+                    fake_images, _, _ = model(noise, reverse=True)
                     
-                    loss = bpd + lossG
-                    if regularization_coeffs:
-                        reg_loss = sum(
-                            reg_state * coeff for reg_state, coeff in zip(reg_states, regularization_coeffs) if coeff != 0
-                        )
-                        loss = loss + reg_loss
-                    total_time = count_total_time(model)
+                    label.fill_(fake_label)
+                    output = netD(fake_images.detach())
+                    lossD_fake = criterion(output, label)
+                    lossD_fake.backward()
+                    D_G_z1 = output.mean().item() ## D(G(z))
+                    lossD = lossD_real + lossD_fake
+                    grad_norm_adv_d = torch.nn.utils.clip_grad_norm_(netD.parameters(), args.max_grad_norm)
+                    optimizerD.step()
+                    ##----------------------------------------------------
+                    
+                    ## ##---Printing (GAN Stuff)
+                    ## if (i+1)%100 == 0:
+                    ##     print('Epoch [{}/{}], step [{}/{}], d_loss: {:.4f}, g_loss: {:.4f}, D(x): {:.2f}, Discriminator ## - D(G(x)): {:.2f}, Generator - D(G(x)): {:.2f}'.format(epoch+1, args.num_epochs, 
+                    ##                                         i+1, num_batches, lossD.item(), lossG.item(), D_x, D_G_z1, ## D_G_z2))
+                    ##----------------------------------------------------
 
-                    if args.training_type in ['hyb','lik']:
-                        loss.backward()
-                    
-                    nfe_opt = count_nfe(model)
-                    
-                    if write_log: steps_meter.update(nfe_opt)
-                    
+                    ##---Training Generator/CNF Adversarially------------
+                    model.zero_grad()
+                    optimizer.zero_grad()
 
-                    if args.training_type in ['hyb','lik']:
-                        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                    label.fill_(real_label)
+                    output = netD(fake_images) ##** Do I need to compute this again? Can I use from before??
+                    lossG = criterion(output, label)
+                    if args.training_type == 'adv':
+                        lossG.backward()
+                        grad_norm_adv_g = torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                         optimizer.step()
-
-
-                    itr_time = time.time() - start
-                    wall_clock += itr_time
+                    D_G_z2 = output.mean().item()
                     
-                    batch_size = x.size(0)
-                    metrics = torch.tensor([1., batch_size,
-                                            loss.item(),
-                                            bpd.item(),
-                                            nfe_opt,
-                                            grad_norm,
-                                            *reg_states]).float().cuda()
 
-                    rv = tuple(torch.tensor(0.).cuda() for r in reg_states)
-
-                    total_gpus, batch_total, r_loss, r_bpd, r_nfe, r_grad_norm, *rv = metrics.cpu().numpy()
+                    ##---------------------------------------------------
 
 
-                    
-                    if write_log:
-                        time_meter.update(itr_time)
-                        bpd_meter.update(r_bpd/total_gpus)
-                        loss_meter.update(r_loss/total_gpus)
-                        grad_meter.update(r_grad_norm/total_gpus)
-                        tt_meter.update(total_time)
+                # compute loss
+                if args.training_type in ['hyb','lik']:
+                    model.zero_grad()
+                    optimizer.zero_grad()
 
-                        fmt = '{:.4f}'
-                        logdict = {'itr':itr, 
-                            'wall': fmt.format(wall_clock),
-                            'itr_time': fmt.format(itr_time),
-                            'loss': fmt.format(r_loss/total_gpus),
-                            'bpd': fmt.format(r_bpd/total_gpus),
-                            'total_time':fmt.format(total_time),
-                            'fe': r_nfe/total_gpus,
-                            'grad_norm': fmt.format(r_grad_norm/total_gpus),
-                            }
-                        
-                        if args.training_type in ['hyb','adv']:
-                            adv_d_loss_meter.update(lossD.item())
-                            adv_g_loss_meter.update(lossG.item())
-                            d_g_acc_meter.update(D_G_z1)
-                            d_acc_meter.update(D_x)
+                bpd, (x, z), reg_states = compute_bits_per_dim(x, model)
+                if np.isnan(bpd.data.item()):
+                    raise ValueError('model returned nan during training')
+                elif np.isinf(bpd.data.item()):
+                    raise ValueError('model returned inf during training')
+                
+                loss = bpd + lossG
+                if regularization_coeffs:
+                    reg_loss = sum(
+                        reg_state * coeff for reg_state, coeff in zip(reg_states, regularization_coeffs) if coeff != 0
+                    )
+                    loss = loss + reg_loss
+                total_time = count_total_time(model)
 
-                            logdict['adv_d_loss']=lossD.item()
-                            logdict['adv_g_loss']=lossG.item()
-                            logdict['d_g_acc']=D_G_z1
-                            logdict['d_acc']=D_x
+                if args.training_type in ['hyb','lik']:
+                    loss.backward()
+                
+                nfe_opt = count_nfe(model)
+                
+                if write_log: steps_meter.update(nfe_opt)
+                
 
-                        if regularization_coeffs:
-                            rv = tuple(v_/total_gpus for v_ in rv)
-                            logdict = append_regularization_csv_dict(logdict,
-                                    regularization_fns, rv)
+                if args.training_type in ['hyb','lik']:
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                    optimizer.step()
+
+
+                itr_time = time.time() - start
+                wall_clock += itr_time
+                
+                batch_size = x.size(0)
+                metrics = torch.tensor([1., batch_size,
+                                        loss.item(),
+                                        bpd.item(),
+                                        nfe_opt,
+                                        grad_norm,
+                                        *reg_states]).float().cuda()
+
+                rv = tuple(torch.tensor(0.).cuda() for r in reg_states)
+
+                total_gpus, batch_total, r_loss, r_bpd, r_nfe, r_grad_norm, *rv = metrics.cpu().numpy()
+
+
+                
+
+                time_meter.update(itr_time)
+                bpd_meter.update(r_bpd/total_gpus)
+                loss_meter.update(r_loss/total_gpus)
+                grad_meter.update(r_grad_norm/total_gpus)
+                tt_meter.update(total_time)
+
+                fmt = '{:.4f}'
+                logdict = {'itr':itr, 
+                    'wall': fmt.format(wall_clock),
+                    'itr_time': fmt.format(itr_time),
+                    'loss': fmt.format(r_loss/total_gpus),
+                    'bpd': fmt.format(r_bpd/total_gpus),
+                    'total_time':fmt.format(total_time),
+                    'fe': r_nfe/total_gpus,
+                    'grad_norm': fmt.format(r_grad_norm/total_gpus),
+                    }
+                
+                if args.training_type in ['hyb','adv']:
+                    adv_d_loss_meter.update(lossD.item())
+                    adv_g_loss_meter.update(lossG.item())
+                    d_g_acc_meter.update(D_G_z1)
+                    d_acc_meter.update(D_x)
+
+                    logdict['adv_d_loss']=lossD.item()
+                    logdict['adv_g_loss']=lossG.item()
+                    logdict['d_g_acc']=D_G_z1
+                    logdict['d_acc']=D_x
+
+                if regularization_coeffs:
+                    rv = tuple(v_/total_gpus for v_ in rv)
+                    logdict = append_regularization_csv_dict(logdict,
+                            regularization_fns, rv)
+
+
+                if itr % 10 == 0:
+                    if args.training_type in ['lik']:        
+                        log_message = (
+                                "Itr {:06d} | Wall {:.3e}({:.2f}) | "
+                                "Time/Itr {:.2f}({:.2f}) | BPD {:.2f}({:.2f}) | "
+                                "Loss {:.2f}({:.2f}) | "
+                                "FE {:.0f}({:.0f}) | Grad Norm {:.3e}({:.3e}) | "
+                                "TT {:.2f}({:.2f})".format(
+                                itr, wall_clock, wall_clock/(itr+1), 
+                                time_meter.val, time_meter.avg,
+                                bpd_meter.val, bpd_meter.avg,
+                                loss_meter.val, loss_meter.avg,
+                                steps_meter.val, steps_meter.avg,
+                                grad_meter.val, grad_meter.avg, 
+                                tt_meter.val, tt_meter.avg
+                                )
+                            )
+                    else:   
+                        log_message = (
+                                "Itr {:06d} | Wall {:.3e}({:.2f}) | "
+                                "Time/Itr {:.2f}({:.2f}) | BPD {:.2f}({:.2f}) | "
+                                "Loss {:.2f}({:.2f}) | "
+                                "FE {:.0f}({:.0f}) | Grad Norm {:.3e}({:.3e}) | "
+                                "TT {:.2f}({:.2f}) | D Loss {:.2f}({:.2f}) | " 
+                                "G (Adv) Loss {:.2f}({:.2f}) | D(G(z)) Real Prediction {:.3f}({:.3f}) | "
+                                "D(x) Real Prediction {:.3f}({:.3f})".format(
+                                itr, wall_clock, wall_clock/(itr+1), 
+                                time_meter.val, time_meter.avg,
+                                bpd_meter.val, bpd_meter.avg,
+                                loss_meter.val, loss_meter.avg,
+                                steps_meter.val, steps_meter.avg,
+                                grad_meter.val, grad_meter.avg, 
+                                tt_meter.val, tt_meter.avg,
+                                adv_d_loss_meter.val, adv_d_loss_meter.avg,
+                                adv_g_loss_meter.val,adv_g_loss_meter.avg,
+                                d_g_acc_meter.val,d_g_acc_meter.avg,
+                                d_acc_meter.val,d_acc_meter.avg
+                                )
+                            )
+                    if regularization_coeffs:
+                        log_message = append_regularization_to_log(log_message,
+                                regularization_fns, rv)
+                    logger.info(log_message)
+                    with open(trainlog,'a') as f:
+                        csvlogger = csv.DictWriter(f, traincolumns)
                         csvlogger.writerow(logdict)
 
-                        if itr % args.log_freq == 0:
-                            if args.training_type in ['lik']:        
-                                log_message = (
-                                        "Itr {:06d} | Wall {:.3e}({:.2f}) | "
-                                        "Time/Itr {:.2f}({:.2f}) | BPD {:.2f}({:.2f}) | "
-                                        "Loss {:.2f}({:.2f}) | "
-                                        "FE {:.0f}({:.0f}) | Grad Norm {:.3e}({:.3e}) | "
-                                        "TT {:.2f}({:.2f})".format(
-                                        itr, wall_clock, wall_clock/(itr+1), 
-                                        time_meter.val, time_meter.avg,
-                                        bpd_meter.val, bpd_meter.avg,
-                                        loss_meter.val, loss_meter.avg,
-                                        steps_meter.val, steps_meter.avg,
-                                        grad_meter.val, grad_meter.avg, 
-                                        tt_meter.val, tt_meter.avg
-                                        )
-                                    )
-                            else:   
-                                log_message = (
-                                        "Itr {:06d} | Wall {:.3e}({:.2f}) | "
-                                        "Time/Itr {:.2f}({:.2f}) | BPD {:.2f}({:.2f}) | "
-                                        "Loss {:.2f}({:.2f}) | "
-                                        "FE {:.0f}({:.0f}) | Grad Norm {:.3e}({:.3e}) | "
-                                        "TT {:.2f}({:.2f}) | D Loss {:.2f}({:.2f}) | " 
-                                        "G (Adv) Loss {:.2f}({:.2f}) | D(G(z)) Real Prediction {:.3f}({:.3f}) | "
-                                        "D(x) Real Prediction {:.3f}({:.3f})".format(
-                                        itr, wall_clock, wall_clock/(itr+1), 
-                                        time_meter.val, time_meter.avg,
-                                        bpd_meter.val, bpd_meter.avg,
-                                        loss_meter.val, loss_meter.avg,
-                                        steps_meter.val, steps_meter.avg,
-                                        grad_meter.val, grad_meter.avg, 
-                                        tt_meter.val, tt_meter.avg,
-                                        adv_d_loss_meter.val, adv_d_loss_meter.avg,
-                                        adv_g_loss_meter.val,adv_g_loss_meter.avg,
-                                        d_g_acc_meter.val,d_g_acc_meter.avg,
-                                        d_acc_meter.val,d_acc_meter.avg
-                                        )
-                                    )
-                            if regularization_coeffs:
-                                log_message = append_regularization_to_log(log_message,
-                                        regularization_fns, rv)
-                            logger.info(log_message)
+                if itr % 50 ==0:
+                    with torch.no_grad():
 
+                        fig_filename = os.path.join(args.save, "itr_figs", "epoch{:04d}_itr{:04d}.jpg".format(epoch,itr))
+                        utils.makedirs(os.path.dirname(fig_filename))
+                        generated_samples, _, _ = model(fixed_z, reverse=True)
+                        generated_samples = generated_samples.view(-1, *data_shape)
+                        nb = int(np.ceil(np.sqrt(float(fixed_z.size(0)))))
+                        save_image(unshift(generated_samples, nbits=args.nbits), fig_filename, nrow=nb)
 
-
-                    itr += 1
+                itr += 1
 
         # compute test loss
         model.eval()
         if args.training_type in ['hyb','adv']: netD.eval()
 
-        if args.local_rank==0:
-            utils.makedirs(args.save)
-            if args.training_type=='lik':
-                torch.save({
-                    "args": args,
-                    "state_dict": model.module.state_dict() if torch.cuda.is_available() else model.state_dict(),
-                    "optim_state_dict": optimizer.state_dict(), 
-                    "fixed_z": fixed_z.cpu()
-                }, os.path.join(args.save, "checkpt.pth"))
-            else:
-                torch.save({
-                    "args": args,
-                    "gen_state_dict": model.module.state_dict() if torch.cuda.is_available() else model.state_dict(),
-                    "disc_state_dict": netD.state_dict(),
-                    "optim_state_dict": optimizer.state_dict(), 
-                    "disc_optim_state_dict": optimizerD.state_dict(), 
-                    "fixed_z": fixed_z.cpu()
-                }, os.path.join(args.save, "checkpt.pth"))
+
+        utils.makedirs(args.save)
+        if args.training_type=='lik':
+            torch.save({
+                "args": args,
+                "state_dict": model.module.state_dict() if torch.cuda.is_available() else model.state_dict(),
+                "optim_state_dict": optimizer.state_dict(), 
+                "fixed_z": fixed_z.cpu()
+            }, os.path.join(args.save, "checkpt.pth"))
+        else:
+            torch.save({
+                "args": args,
+                "gen_state_dict": model.module.state_dict() if torch.cuda.is_available() else model.state_dict(),
+                "disc_state_dict": netD.state_dict(),
+                "optim_state_dict": optimizer.state_dict(), 
+                "disc_optim_state_dict": optimizerD.state_dict(), 
+                "fixed_z": fixed_z.cpu()
+            }, os.path.join(args.save, "checkpt.pth"))
 
 
-        if epoch % args.val_freq == 0 or args.validate:
-            with open(testlog,'a') as f:
-                if write_log: csvlogger = csv.DictWriter(f, testcolumns)
-                with torch.no_grad():
-                    start = time.time()
-                    if write_log: logger.info("validating...")
+        if epoch % 1 == 0 or args.validate:
+
+            with torch.no_grad():
+                start = time.time()
+                if write_log: logger.info("validating...")
 
 
-                    lossmean = 0.
-                    meandist = 0.
-                    steps = 0
-                    tt = 0.
-                    for i, (x, y) in enumerate(test_loader):
-                        sh = x.shape
-                        x = shift(cvt(x), nbits=args.nbits)
-                        loss, (x,z), _ = compute_bits_per_dim(x, model)
-                        dist = (x.view(x.size(0),-1)-z).pow(2).mean(dim=-1).mean()
-                        meandist = i/(i+1)*dist + meandist/(i+1)
-                        lossmean = i/(i+1)*lossmean + loss/(i+1) 
+                lossmean = 0.
+                meandist = 0.
+                steps = 0
+                tt = 0.
+                for i, (x, y) in enumerate(test_loader):
+                    sh = x.shape
+                    x = shift(cvt(x), nbits=args.nbits)
+                    loss, (x,z), _ = compute_bits_per_dim(x, model)
+                    dist = (x.view(x.size(0),-1)-z).pow(2).mean(dim=-1).mean()
+                    meandist = i/(i+1)*dist + meandist/(i+1)
+                    lossmean = i/(i+1)*lossmean + loss/(i+1) 
 
-                        tt = i/(i+1)*tt + count_total_time(model)/(i+1)
-                        steps = i/(i+1)*steps + count_nfe(model)/(i+1)
+                    tt = i/(i+1)*tt + count_total_time(model)/(i+1)
+                    steps = i/(i+1)*steps + count_nfe(model)/(i+1)
 
 
 
-                    loss = lossmean.item()
-                    metrics = torch.tensor([1., loss, meandist, steps]).float().cuda()
+                loss = lossmean.item()
+                metrics = torch.tensor([1., loss, meandist, steps]).float().cuda()
 
-                    total_gpus, r_bpd, r_mdist, r_steps = metrics.cpu().numpy()
-                    eval_time = time.time()-start
+                total_gpus, r_bpd, r_mdist, r_steps = metrics.cpu().numpy()
+                eval_time = time.time()-start
 
-                    if write_log:
-                        fmt = '{:.4f}'
-                        logdict = {'epoch':epoch,
-                                   'eval_time':fmt.format(eval_time),
-                                   'bpd':fmt.format(r_bpd/total_gpus),
-                                   'wall': fmt.format(wall_clock),
-                                   'total_time':fmt.format(tt),
-                                   'transport_cost':fmt.format(r_mdist/total_gpus),
-                                   'fe':'{:.2f}'.format(r_steps/total_gpus)}
+                if write_log:
+                    fmt = '{:.4f}'
+                    logdict = {'epoch':epoch,
+                                'eval_time':fmt.format(eval_time),
+                                'bpd':fmt.format(r_bpd/total_gpus),
+                                'wall': fmt.format(wall_clock),
+                                'total_time':fmt.format(tt),
+                                'transport_cost':fmt.format(r_mdist/total_gpus),
+                                'fe':'{:.2f}'.format(r_steps/total_gpus)}
 
+                    with open(testlog,'a') as f:
+                        csvlogger = csv.DictWriter(f, testcolumns)
                         csvlogger.writerow(logdict)
 
-                        logger.info("Epoch {:04d} | Time {:.4f}, Bit/dim {:.4f}, Steps {:.4f}, TT {:.2f}, Transport Cost {:.2e}".format(epoch, eval_time, r_bpd/total_gpus, r_steps/total_gpus, tt, r_mdist/total_gpus))
+                    logger.info("Epoch {:04d} | Time {:.4f}, Bit/dim {:.4f}, Steps {:.4f}, TT {:.2f}, Transport Cost {:.2e}".format(epoch, eval_time, r_bpd/total_gpus, r_steps/total_gpus, tt, r_mdist/total_gpus))
 
-                    loss = r_bpd/total_gpus
+                loss = r_bpd/total_gpus
+
+                
+
+                if loss < best_loss:
+                    best_loss = loss
+                    shutil.copyfile(os.path.join(args.save, "checkpt.pth"),
+                                    os.path.join(args.save, "best.pth"))
 
 
-                    if loss < best_loss and args.local_rank==0: 
-                        best_loss = loss
-                        shutil.copyfile(os.path.join(args.save, "checkpt.pth"),
-                                        os.path.join(args.save, "best.pth"))
 
+        # visualize samples and density
 
-
-            # visualize samples and density
-            if write_log:
-                with torch.no_grad():
-                    fig_filename = os.path.join(args.save, "figs", "{:04d}.jpg".format(epoch))
-                    utils.makedirs(os.path.dirname(fig_filename))
-                    generated_samples, _, _ = model(fixed_z, reverse=True)
-                    generated_samples = generated_samples.view(-1, *data_shape)
-                    nb = int(np.ceil(np.sqrt(float(fixed_z.size(0)))))
-                    save_image(unshift(generated_samples, nbits=args.nbits), fig_filename, nrow=nb)
-            if args.validate:
-                break
+        with torch.no_grad():
+            fig_filename = os.path.join(args.save, "figs", "{:04d}.jpg".format(epoch))
+            utils.makedirs(os.path.dirname(fig_filename))
+            generated_samples, _, _ = model(fixed_z, reverse=True)
+            generated_samples = generated_samples.view(-1, *data_shape)
+            nb = int(np.ceil(np.sqrt(float(fixed_z.size(0)))))
+            save_image(unshift(generated_samples, nbits=args.nbits), fig_filename, nrow=nb)
+        if args.validate:
+            break
 
 '''if __name__ == '__main__':
     try:
